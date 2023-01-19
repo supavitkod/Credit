@@ -1,0 +1,585 @@
+# %%
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set()
+%matplotlib inline
+
+# %%
+from function import function
+
+# %% [markdown]
+# ### DATA UNDERSTANDING
+
+# %%
+## DATA UNDERSTANDING
+raw_credit = pd.read_csv('credit_record.csv')
+print(raw_credit.head())
+print(raw_credit.shape,raw_credit.info())
+
+# %%
+raw_application = pd.read_csv('application_record.csv')
+print(raw_application.head())
+print(raw_application.shape)
+
+# %% [markdown]
+# 
+# ID : Client number	
+# 
+# CODE_GENDER	: Gender	
+# 
+# FLAG_OWN_CAR : Is there a car	
+# 
+# FLAG_OWN_REALTY	: Is there a property	
+# 
+# CNT_CHILDREN : Number of children	
+# 
+# AMT_INCOME_TOTAL : Annual income
+# 
+# NAME_INCOME_TYPE : Income category	
+# 
+# NAME_EDUCATION_TYPE	: Education level	
+# 
+# NAME_FAMILY_STATUS	: Marital status	
+# 
+# NAME_HOUSING_TYPE	: Way of living	
+# 
+# DAYS_BIRTH	: Birthday	,Count backwards from current day (0), -1 means yesterday
+# 
+# DAYS_EMPLOYED	: Start date of employment	,Count backwards from current day(0). If positive, it means the person currently unemployed.
+# 
+# FLAG_MOBIL	: Is there a mobile phone	
+# 
+# FLAG_WORK_PHONE	: Is there a work phone	
+# 
+# FLAG_PHONE	: Is there a phone	
+# 
+# FLAG_EMAIL	: Is there an email	
+# 
+# OCCUPATION_TYPE	: Occupation	
+# 
+# CNT_FAM_MEMBERS	: Family size	
+# 
+# MONTHS_BALANCE	: Record month	,The month of the extracted data is the starting point, backwards, 0 is the current month, -1 is the previous month, and so on
+# 
+# STATUS	: Status ,	0: 1-29 days past due 1: 30-59 days past due 2: 60-89 days overdue 3: 90-119 days overdue 4: 120-149 days overdue 5: Overdue or bad debts, write-offs for more than 150 days C: paid off that month X: No loan for the month
+
+# %%
+raw_application.info()
+
+# %%
+df = raw_application.merge(raw_credit, on='ID', how='inner')
+print(df.shape)
+print(df.sample(5))
+
+# %%
+df = function.select_first_month(df)
+
+# %%
+df.head(10)
+
+# %%
+df.describe(include='all')
+
+# %%
+df.info()
+
+# %% [markdown]
+# ### DATA CLEANING
+
+# %%
+### cleaning
+df.isnull().sum()
+
+# %%
+print(df['OCCUPATION_TYPE'].nunique())
+df['OCCUPATION_TYPE'].fillna('Others',inplace=True)
+print(df['OCCUPATION_TYPE'].nunique())
+
+# %%
+print(df.isnull().sum())
+df.shape
+
+# %%
+df.duplicated().sum()
+
+# %%
+df
+
+# %%
+### Drop unnecessary data
+df.drop(['FLAG_MOBIL'],axis=1,inplace=True)
+# Min and Max same number no use
+
+
+# %% [markdown]
+# ### EDA
+
+# %%
+df = df.rename(columns={'CODE_GENDER': 'Gender', 'FLAG_OWN_CAR': 'Own_car', 
+                               'FLAG_OWN_REALTY':'Own_property','CNT_CHILDREN':'Nbchildren',
+                               'AMT_INCOME_TOTAL':'Total_income_per_year','NAME_INCOME_TYPE':'Income_type',
+                               'NAME_EDUCATION_TYPE':'Education_level','NAME_FAMILY_STATUS':'Marital_status',
+                               'NAME_HOUSING_TYPE':'Way_of_living','FLAG_WORK_PHONE':'Workphone',
+                               'FLAG_PHONE':'Phone','FLAG_EMAIL':'Email','OCCUPATION_TYPE':'Occupation',
+                               'CNT_FAM_MEMBERS':'Nbfamily_member'})
+
+# %%
+df.info()
+
+# %%
+### DEALING WITH NUMERICAL COLUMNS
+numeric_cols = df.select_dtypes(include='number')
+print(numeric_cols.columns)
+
+# %%
+sns.boxplot(x=df["Nbchildren"]) ### correlated with number of family_member
+print(df['Nbchildren'].value_counts().sort_values(ascending=False))
+print()
+
+
+# %%
+number_Children_outlier = df['Nbchildren'].quantile(0.99)
+df = df[df['Nbchildren'] < number_Children_outlier]
+
+# %%
+sns.displot(df, x="Total_income_per_year")
+print(df['Total_income_per_year'].value_counts().sort_values(ascending=False))
+print()
+
+# %%
+Total_income_per_year_outlier = df['Total_income_per_year'].quantile(0.99)
+df = df[df['Total_income_per_year'] < Total_income_per_year_outlier]
+
+# %%
+sns.boxplot(x=df["Nbfamily_member"])
+print(df['Nbfamily_member'].value_counts().sort_values(ascending=False))
+
+### might have high correlation with Number of children
+
+# %%
+sns.displot(df,x='DAYS_BIRTH')
+
+
+# %%
+sns.boxplot(x=df['DAYS_EMPLOYED'])
+
+
+# %%
+df['DAYS_BIRTH']
+
+# %%
+## DEALING WITH NUMERICAL COLUMNS
+def Categorical_countplot(features):
+    for categorical_columns in features:
+        plt.figure(figsize=(12, 12))
+        ax=sns.countplot(y=df[categorical_columns], hue='Gender' , data=df)
+        plt.legend(loc='best')
+        total = len(df[categorical_columns])
+        for p in ax.patches:
+            percentage = '{:.1f}%'.format(100 * p.get_width()/total)
+            x = p.get_x() + p.get_width() + 0.02
+            y = p.get_y() + p.get_height()/2
+            ax.annotate(percentage, (x, y))
+    plt.show()
+
+# %%
+categorical_columns = df.select_dtypes(include=['object', 'category'])
+print(categorical_columns.columns)
+
+# %%
+Categorical_countplot(['Gender','Own_car', 'Own_property', 'Income_type', 'Education_level',
+       'Marital_status', 'Way_of_living', 'Occupation', 'STATUS'])
+
+# %% [markdown]
+# ### Feature engineering
+
+# %%
+### Feature engineering
+
+
+# %%
+def convert_day_to_year(days):
+    days = round(days/-365,0)
+    return days
+
+# %%
+df
+
+# %%
+df['Age'] = df['DAYS_BIRTH'].apply(convert_day_to_year)
+df['Age'] = df['Age'].astype(int)
+df['Experience'] = df['DAYS_EMPLOYED'].apply(convert_day_to_year)
+df['Total_income_lifetime_employed'] = df['Experience'] * df['Total_income_per_year']
+df['Working_year_proportion'] = df['Experience'] / df['Age']
+
+df.drop('DAYS_BIRTH',axis=1,inplace=True)
+df.drop('DAYS_EMPLOYED',axis=1,inplace=True)
+
+# %%
+(df['Experience'] > 0).value_counts().plot(kind="bar")
+### True is number of people who unemployment
+
+# %%
+def employment_status(date):
+    # Determine the employment status based on the duration
+    if date < 0:
+        return "Unemployed"
+    else:
+        return "Employment"
+
+# %%
+df['Employment_status'] = df['Experience'].apply(employment_status)
+
+# %%
+df['Employment_status'].value_counts().plot(kind="pie",autopct="%.1f%%",labels=["Unemploy","Employ"])
+## 82.6 percent of people are unemployed while only 17.4 percent are employed
+
+# %%
+df['STATUS'].replace({'C': 6, 'X' : 7}, inplace=True)
+df['STATUS']=df['STATUS'].astype(int)
+
+# %%
+def Risk_evaluation(score):
+    risk_range = [2,3,4,5]
+    if score in risk_range:
+        return '1'
+    else:
+        return '0'
+
+
+## 1 risk 0 No 
+
+# %%
+df['Risk'] = df['STATUS'].apply(Risk_evaluation)
+print(df['Risk'].value_counts(normalize=True))
+print(df['Risk'].value_counts().plot(kind='bar'))
+## Imbalance dataset
+
+
+# %% [markdown]
+# ### DATA VISUALIZING
+
+# %%
+df
+
+# %%
+columns = df.columns
+columns
+
+# %%
+### drop unnecessary columns
+df = df.drop(columns=['ID'])
+
+# %%
+column = ['Gender', 'Own_car', 'Own_property', 'Nbchildren',
+        'Income_type', 'Education_level',
+       'Marital_status', 'Way_of_living', 'Workphone', 'Phone', 'Email',
+       'Occupation', 'Nbfamily_member', 'STATUS','Employment_status']
+for variable in column:
+    df.groupby(variable)['Risk'].value_counts().plot(kind='bar')
+    plt.show()
+
+
+# %%
+df
+
+# %%
+plt.figure(figsize = (16,10))
+sns.heatmap(df.corr(),annot= True)
+plt.show()
+
+# %%
+df.corr().columns
+
+# %%
+df.drop(['STATUS'],axis=1,inplace=True)
+df.drop('MONTHS_BALANCE',axis=1,inplace=True)
+
+# %%
+df.drop('Working_year_proportion',axis=1,inplace=True)
+
+
+# %%
+from imblearn.over_sampling import SMOTENC
+
+# %%
+df.info()
+
+# %% [markdown]
+# ### DATA PREPROCESSING
+
+# %%
+df['Risk'] = df['Risk'].astype('int')
+
+# %%
+X = df.drop(['Risk'],axis=1)
+y = df['Risk']
+
+# %%
+X.select_dtypes(include=['object', 'category']).columns
+
+# %%
+X.select_dtypes(include='number').columns
+
+# %%
+X =  X[['Gender', 'Own_car', 'Own_property', 'Income_type', 'Education_level',
+       'Marital_status', 'Way_of_living', 'Occupation', 'Employment_status','Nbchildren', 'Total_income_per_year', 'Workphone', 'Phone', 'Email',
+       'Nbfamily_member', 'Age', 'Experience',
+       'Total_income_lifetime_employed']]
+
+# %%
+X.info()
+
+# %%
+from imblearn.over_sampling import SMOTENC
+oversample = SMOTENC(categorical_features = range(0,9))
+X_balanced, y_balanced = oversample.fit_resample(X, y)
+
+# %%
+y_balanced.value_counts()
+
+# %%
+from sklearn.model_selection import train_test_split
+X_train ,X_test ,y_train,y_test = train_test_split(X_balanced,y_balanced,test_size=0.3,random_state=62)
+
+# %%
+from sklearn.feature_extraction import DictVectorizer
+encoded = DictVectorizer(sparse=False)
+X_train_dict = encoded.fit_transform(X_train.to_dict('records'))
+X_test_dict  = encoded.transform(X_test.to_dict('records'))
+print(X_train_dict.shape)
+print(X_train_dict)
+
+# %%
+# data standarization 
+from sklearn.preprocessing import StandardScaler
+scaler=StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train_dict)
+X_test_scaled = scaler.transform(X_test_dict)
+
+# %%
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix,roc_auc_score
+
+Logit = LogisticRegression()
+Logit.fit(X_train_scaled, y_train)
+
+print('Logistic Model Accuracy : ', Logit.score(X_test_scaled, y_test)*100, '%')
+
+prediction = Logit.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from sklearn.tree import DecisionTreeClassifier
+
+decision_model = DecisionTreeClassifier(max_depth=12,min_samples_split=8)
+
+decision_model.fit(X_train_scaled, y_train)
+
+print('Decision Tree Model Accuracy : ', decision_model.score(X_test_scaled, y_test)*100, '%')
+
+prediction = decision_model.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from sklearn.svm import SVC
+
+svc_model = SVC()
+
+svc_model.fit(X_train_scaled, y_train)
+
+print('Support Vector Classifier Accuracy : ', svc_model.score(X_test_scaled, y_test)*100, '%')
+
+prediction = svc_model.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from sklearn.ensemble import RandomForestClassifier
+
+Random_model  = RandomForestClassifier(max_depth=12,min_samples_leaf=16)
+
+Random_model.fit(X_train_scaled, y_train)
+
+print('Random forest Model Accuracy : ', Random_model.score(X_test_scaled, y_test)*100, '%')
+
+prediction = Random_model.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from lightgbm import LGBMClassifier
+LGBM_model  = LGBMClassifier()
+
+LGBM_model.fit(X_train_scaled, y_train)
+
+print('Light GBM Model Accuracy : ', LGBM_model.score(X_test_scaled, y_test)*100, '%')
+
+prediction = LGBM_model.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from xgboost import XGBClassifier
+XGB_model  =XGBClassifier(use_label_encoder=False)
+
+XGB_model.fit(X_train_scaled, y_train)
+
+print('Xg Boost Model Accuracy : ', XGB_model.score(X_test_scaled, y_test)*100, '%')
+
+prediction = XGB_model.predict(X_test_scaled)
+print('\nConfusion matrix :')
+print(confusion_matrix(y_test, prediction))
+      
+print('\nClassification report:')      
+print(classification_report(y_test, prediction))
+
+print('\ROC_AUC_SCORE report:')
+print(roc_auc_score(y_test,prediction))
+
+# %%
+from sklearn.model_selection import GridSearchCV
+param_grid = { 
+   'max_depth' : range(5,20,5),
+    'min_samples_leaf' : range(50,210,50),
+    'min_samples_split' : range(50,210,50),
+    'criterion' : ['gini','entropy']
+}
+grid = GridSearchCV(Random_model, param_grid, cv = 5)
+grid
+
+# %%
+grid.fit(X_train_scaled,y_train)
+
+# %%
+grid.best_params_
+
+# %%
+grid.cv_results_
+
+# %%
+grid.best_score_
+
+# %%
+Random_best_model = grid.best_estimator_
+
+# %%
+final_model = Random_best_model.fit(X_train_scaled,y_train)
+
+# %%
+final_model.score(X_test_scaled,y_test)
+
+# %%
+test = X.iloc[9,:].to_dict()
+test
+
+# %%
+test = {'Gender': 'M',
+ 'Own_car': 'Y',
+ 'Own_property': 'Y',
+ 'Income_type': 'Working',
+ 'Education_level': 'Higher education',
+ 'Marital_status': 'Married',
+ 'Way_of_living': 'House / apartment',
+ 'Occupation': 'Accountants',
+ 'Employment_status': 'Employment',
+ 'Nbchildren': 0,
+ 'Total_income_per_year': 270000.0,
+ 'Workphone': 1,
+ 'Phone': 1,
+ 'Email': 1,
+ 'Nbfamily_member': 2.0,
+ 'Age': 46,
+ 'Experience': 2.0,
+ 'Total_income_lifetime_employed': 540000.0}
+
+test_encoded = encoded.transform(test)
+test_scaler = scaler.transform(test_encoded)
+
+# %%
+final_model.predict(test_scaler)
+
+# %%
+final_model
+
+# %%
+test = pd.DataFrame(encoded.get_feature_names_out(),final_model.feature_importances_).reset_index()
+
+# %%
+test.sort_values(by = "index", ascending = False)
+
+# %%
+estimator = Random_forest_best.estimators_[0]
+
+# %%
+tree_model = tree.plot_tree(estimator,filled=True)
+
+# %%
+import pickle
+
+# %%
+C=1.0
+
+# %%
+output_file = f'Model_C={C}.bin'
+output_file
+
+# %%
+### save the model
+with open(output_file, 'wb') as file_out:
+    pickle.dump((encoded,scaler,final_model),file_out)
+
+# %%
+### load the model
+import pickle
+
+# %%
+input_file = f'Model_C={C}.bin'  
+
+# %%
+with open(input_file, 'rb') as file_in:
+    encoded,scaler,final_model = pickle.load(file_in)
+
+# %%
+test_vectorizer = encoded.transform([test])
+test_vectorizer_scaled = scaler.transform(test_vectorizer)
+final_model.predict(test_vectorizer_scaled)
+
+# %%
+
+
+

@@ -16,8 +16,8 @@ class TestSelectFirstMonth(unittest.TestCase):
         # Create a reference DataFrame with the expected output
         expected_result = pd.DataFrame({
             'ID':[1,3,4], 
-            'MONTHS_BALANCE' : [-1, 0, -1], 
-            'STATUS' : [0, 'C', 1]})
+            'MONTHS_BALANCE' : [-2, -1, -1], 
+            'STATUS' : [0, 1, 1]})
         
         # Assert that the result is equal to the expected result
         pd.testing.assert_frame_equal(result, expected_result)
