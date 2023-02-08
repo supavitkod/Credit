@@ -11,5 +11,5 @@ Increased Profitability: By lending to customers with a good credit history, the
 Improved Customer Relationships: By offering tailored loan products and services based on a customer's credit history, the bank can improve customer satisfaction and strengthen customer relationships.
 
 
-gDetermining a customer's creditworthiness is a crucial aspect of risk management for banks. By using credit score cards, banks can make informed lending decisions that are in their best interests and the best interests of their customers. This leads to improved risk management, better lending decisions, increased profitability, and improved customer relationships.
+-Determining a customer's creditworthiness is a crucial aspect of risk management for banks. By using credit score cards, banks can make informed lending decisions that are in their best interests and the best interests of their customers. This leads to improved risk management, better lending decisions, increased profitability, and improved customer relationships.
 
