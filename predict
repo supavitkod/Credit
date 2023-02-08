@@ -19,12 +19,14 @@ print(raw_credit.head())
 print(raw_credit.shape,raw_credit.info())
 
 # %%
+raw_credit.groupby('ID').last()
+
+# %%
 raw_application = pd.read_csv('application_record.csv')
 print(raw_application.head())
 print(raw_application.shape)
 
 # %% [markdown]
-# 
 # ID : Client number	
 # 
 # CODE_GENDER	: Gender	
@@ -74,9 +76,6 @@ print(df.shape)
 print(df.sample(5))
 
 # %%
-df = function.select_first_month(df)
-
-# %%
 df.head(10)
 
 # %%
@@ -103,9 +102,6 @@ df.shape
 
 # %%
 df.duplicated().sum()
-
-# %%
-df
 
 # %%
 ### Drop unnecessary data
@@ -196,16 +192,72 @@ Categorical_countplot(['Gender','Own_car', 'Own_property', 'Income_type', 'Educa
 # ### Feature engineering
 
 # %%
-### Feature engineering
+df
 
+# %%
+df[df['ID'] == 5150482]
+
+# %%
+### Feature engineering
+### Labelled Y
+credit_grouped=pd.get_dummies(data=df,columns=['STATUS'],
+                              prefix='',prefix_sep='').groupby('ID')[sorted(df['STATUS'].unique().tolist())].sum()
+credit_grouped
+
+# %%
+credit_grouped=credit_grouped.rename(columns=
+                      {'0':'pastdue_1_29',
+                       '1':'pastdue_30_59',
+                       '2':'overdue_60_89',
+                       '3':'overdue_90_119',
+                       '4':'overdue_120_149',
+                       '5':'overdue_over_150',
+                       'C':'paid_off',
+                        'X':'no_loan'})
+
+overall_pastdue=['pastdue_1_29','pastdue_30_59',	'overdue_60_89',	'overdue_90_119'	,'overdue_120_149',	'overdue_over_150']
+credit_grouped['Total_months_credit_registered']=df.groupby('ID')['MONTHS_BALANCE'].count()
+credit_grouped['Delinquent_accounts']=credit_grouped[['overdue_60_89','overdue_90_119'	,'overdue_120_149'	,'overdue_over_150']].sum(axis=1)
+credit_grouped['Ordinary_accounts']=credit_grouped[['pastdue_1_29','pastdue_30_59']].sum(axis=1)
+credit_grouped['overall_pastdue']=credit_grouped[overall_pastdue].sum(axis=1)
+credit_grouped['paid_pastdue_diff']=credit_grouped['paid_off']- credit_grouped['overall_pastdue']
+credit_grouped.head()
+
+# %%
+target =[]
+for index,row in credit_grouped.iterrows() :
+  if row['paid_pastdue_diff'] >=3 or (row ['no_loan']==row['Total_months_credit_registered']):
+    target.append(0)
+  elif row['overall_pastdue'] == row['Ordinary_accounts']:
+    target.append(0)
+  elif row['paid_pastdue_diff'] >-2 and row['paid_pastdue_diff'] <3 and (row['Ordinary_accounts'] >=row['Delinquent_accounts']) :
+    target.append(0)
+  else:
+    target.append(1)
+
+credit_grouped['Risk']=target
+credit_grouped['Risk'].value_counts()
+
+# %%
+credit_grouped
+
+# %%
+features=['no_loan',	'Total_months_credit_registered',	'Delinquent_accounts',	'Ordinary_accounts',	'overall_pastdue','paid_pastdue_diff','Risk']
+columns_credit= credit_grouped.loc[:,features]
+
+# %%
+df = df.merge(columns_credit,how='inner',on='ID')
+
+# %%
+df = function.select_first_month(df)
+
+# %%
+df.info()
 
 # %%
 def convert_day_to_year(days):
     days = round(days/-365,0)
     return days
-
-# %%
-df
 
 # %%
 df['Age'] = df['DAYS_BIRTH'].apply(convert_day_to_year)
@@ -236,13 +288,12 @@ df['Employment_status'] = df['Experience'].apply(employment_status)
 df['Employment_status'].value_counts().plot(kind="pie",autopct="%.1f%%",labels=["Unemploy","Employ"])
 ## 82.6 percent of people are unemployed while only 17.4 percent are employed
 
-# %%
-df['STATUS'].replace({'C': 6, 'X' : 7}, inplace=True)
-df['STATUS']=df['STATUS'].astype(int)
+# %% [markdown]
+# df = function.select_first_month(df)
 
 # %%
 def Risk_evaluation(score):
-    risk_range = [2,3,4,5]
+    risk_range = [1,2,3,4,5]
     if score in risk_range:
         return '1'
     else:
@@ -252,11 +303,14 @@ def Risk_evaluation(score):
 ## 1 risk 0 No 
 
 # %%
-df['Risk'] = df['STATUS'].apply(Risk_evaluation)
-print(df['Risk'].value_counts(normalize=True))
-print(df['Risk'].value_counts().plot(kind='bar'))
+df['Risk1'] = df['STATUS'].apply(Risk_evaluation)
+print(df['Risk1'].value_counts(normalize=True))
+print(df['Risk1'].value_counts().plot(kind='bar'))
 ## Imbalance dataset
 
+
+# %%
+df['Risk'].value_counts()
 
 # %% [markdown]
 # ### DATA VISUALIZING
@@ -270,13 +324,13 @@ columns
 
 # %%
 ### drop unnecessary columns
-df = df.drop(columns=['ID'])
+df.drop('ID',axis=1,inplace=True)
+df.drop('MONTHS_BALANCE',axis=1,inplace=True)
+df.drop('STATUS',axis=1,inplace=True)
 
 # %%
-column = ['Gender', 'Own_car', 'Own_property', 'Nbchildren',
-        'Income_type', 'Education_level',
-       'Marital_status', 'Way_of_living', 'Workphone', 'Phone', 'Email',
-       'Occupation', 'Nbfamily_member', 'STATUS','Employment_status']
+column = ['Gender', 'Own_car', 'Own_property', 'Income_type', 'Education_level',
+       'Marital_status', 'Way_of_living', 'Occupation', 'Employment_status']
 for variable in column:
     df.groupby(variable)['Risk'].value_counts().plot(kind='bar')
     plt.show()
@@ -293,20 +347,6 @@ plt.show()
 # %%
 df.corr().columns
 
-# %%
-df.drop(['STATUS'],axis=1,inplace=True)
-df.drop('MONTHS_BALANCE',axis=1,inplace=True)
-
-# %%
-df.drop('Working_year_proportion',axis=1,inplace=True)
-
-
-# %%
-from imblearn.over_sampling import SMOTENC
-
-# %%
-df.info()
-
 # %% [markdown]
 # ### DATA PREPROCESSING
 
@@ -318,6 +358,9 @@ X = df.drop(['Risk'],axis=1)
 y = df['Risk']
 
 # %%
+X['Rand'] = np.random.randint(1,3,len(X))
+
+# %%
 X.select_dtypes(include=['object', 'category']).columns
 
 # %%
@@ -326,28 +369,27 @@ X.select_dtypes(include='number').columns
 # %%
 X =  X[['Gender', 'Own_car', 'Own_property', 'Income_type', 'Education_level',
        'Marital_status', 'Way_of_living', 'Occupation', 'Employment_status','Nbchildren', 'Total_income_per_year', 'Workphone', 'Phone', 'Email',
-       'Nbfamily_member', 'Age', 'Experience',
-       'Total_income_lifetime_employed']]
+       'Nbfamily_member', 'no_loan', 'Total_months_credit_registered',
+       'Delinquent_accounts', 'Ordinary_accounts', 'overall_pastdue',
+       'paid_pastdue_diff', 'Age', 'Experience',
+       'Total_income_lifetime_employed', 'Working_year_proportion','Rand']]
 
 # %%
 X.info()
 
 # %%
-from imblearn.over_sampling import SMOTENC
-oversample = SMOTENC(categorical_features = range(0,9))
-X_balanced, y_balanced = oversample.fit_resample(X, y)
-
-# %%
-y_balanced.value_counts()
-
-# %%
 from sklearn.model_selection import train_test_split
-X_train ,X_test ,y_train,y_test = train_test_split(X_balanced,y_balanced,test_size=0.3,random_state=62)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3)
+
+# %%
+from imblearn.over_sampling import SMOTENC
+oversample = SMOTENC(categorical_features = range(0,9),k_neighbors=4)
+X_train_balanced,y_train_balanced = oversample.fit_resample(X_train, y_train)
 
 # %%
 from sklearn.feature_extraction import DictVectorizer
 encoded = DictVectorizer(sparse=False)
-X_train_dict = encoded.fit_transform(X_train.to_dict('records'))
+X_train_dict = encoded.fit_transform(X_train_balanced.to_dict('records'))
 X_test_dict  = encoded.transform(X_test.to_dict('records'))
 print(X_train_dict.shape)
 print(X_train_dict)
@@ -364,7 +406,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix,roc_auc_score
 
 Logit = LogisticRegression()
-Logit.fit(X_train_scaled, y_train)
+Logit.fit(X_train_scaled, y_train_balanced)
 
 print('Logistic Model Accuracy : ', Logit.score(X_test_scaled, y_test)*100, '%')
 
@@ -376,14 +418,18 @@ print('\nClassification report:')
 print(classification_report(y_test, prediction))
 
 print('\ROC_AUC_SCORE report:')
-print(roc_auc_score(y_test,prediction))
+print(roc_auc_score(y_test, prediction))
+
+
 
 # %%
 from sklearn.tree import DecisionTreeClassifier
 
+### Write in function
+
 decision_model = DecisionTreeClassifier(max_depth=12,min_samples_split=8)
 
-decision_model.fit(X_train_scaled, y_train)
+decision_model.fit(X_train_scaled, y_train_balanced)
 
 print('Decision Tree Model Accuracy : ', decision_model.score(X_test_scaled, y_test)*100, '%')
 
@@ -395,14 +441,14 @@ print('\nClassification report:')
 print(classification_report(y_test, prediction))
 
 print('\ROC_AUC_SCORE report:')
-print(roc_auc_score(y_test,prediction))
+print(roc_auc_score(y_test, prediction))
 
 # %%
 from sklearn.svm import SVC
 
 svc_model = SVC()
 
-svc_model.fit(X_train_scaled, y_train)
+svc_model.fit(X_train_scaled, y_train_balanced)
 
 print('Support Vector Classifier Accuracy : ', svc_model.score(X_test_scaled, y_test)*100, '%')
 
@@ -421,7 +467,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 Random_model  = RandomForestClassifier(max_depth=12,min_samples_leaf=16)
 
-Random_model.fit(X_train_scaled, y_train)
+Random_model.fit(X_train_scaled, y_train_balanced)
 
 print('Random forest Model Accuracy : ', Random_model.score(X_test_scaled, y_test)*100, '%')
 
@@ -439,7 +485,7 @@ print(roc_auc_score(y_test,prediction))
 from lightgbm import LGBMClassifier
 LGBM_model  = LGBMClassifier()
 
-LGBM_model.fit(X_train_scaled, y_train)
+LGBM_model.fit(X_train_scaled, y_train_balanced)
 
 print('Light GBM Model Accuracy : ', LGBM_model.score(X_test_scaled, y_test)*100, '%')
 
@@ -457,7 +503,7 @@ print(roc_auc_score(y_test,prediction))
 from xgboost import XGBClassifier
 XGB_model  =XGBClassifier(use_label_encoder=False)
 
-XGB_model.fit(X_train_scaled, y_train)
+XGB_model.fit(X_train_scaled, y_train_balanced)
 
 print('Xg Boost Model Accuracy : ', XGB_model.score(X_test_scaled, y_test)*100, '%')
 
@@ -483,7 +529,7 @@ grid = GridSearchCV(Random_model, param_grid, cv = 5)
 grid
 
 # %%
-grid.fit(X_train_scaled,y_train)
+grid.fit(X_train_scaled,y_train_balanced)
 
 # %%
 grid.best_params_
@@ -498,7 +544,7 @@ grid.best_score_
 Random_best_model = grid.best_estimator_
 
 # %%
-final_model = Random_best_model.fit(X_train_scaled,y_train)
+final_model = Random_best_model.fit(X_train_scaled,y_train_balanced)
 
 # %%
 final_model.score(X_test_scaled,y_test)
@@ -540,12 +586,14 @@ final_model
 test = pd.DataFrame(encoded.get_feature_names_out(),final_model.feature_importances_).reset_index()
 
 # %%
-test.sort_values(by = "index", ascending = False)
+test.sort_values(by = "index", ascending = False).head(20)
+### Add the random variables in case some features lower than Random variable isn't insignificant
 
 # %%
-estimator = Random_forest_best.estimators_[0]
+estimator = final_model.estimators_[0]
 
 # %%
+from sklearn import tree
 tree_model = tree.plot_tree(estimator,filled=True)
 
 # %%
@@ -563,23 +611,6 @@ output_file
 with open(output_file, 'wb') as file_out:
     pickle.dump((encoded,scaler,final_model),file_out)
 
-# %%
-### load the model
-import pickle
-
-# %%
-input_file = f'Model_C={C}.bin'  
-
-# %%
-with open(input_file, 'rb') as file_in:
-    encoded,scaler,final_model = pickle.load(file_in)
-
-# %%
-test_vectorizer = encoded.transform([test])
-test_vectorizer_scaled = scaler.transform(test_vectorizer)
-final_model.predict(test_vectorizer_scaled)
-
-# %%
 
 
 
