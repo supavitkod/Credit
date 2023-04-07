@@ -15,7 +15,7 @@ class TestSelectFirstMonth(unittest.TestCase):
         
         # Create a reference DataFrame with the expected output
         expected_result = pd.DataFrame({
-            'ID':[1,3,4], 
+            'ID':[1,3,4],
             'MONTHS_BALANCE' : [-2, -1, -1], 
             'STATUS' : [0, 1, 1]})
         
