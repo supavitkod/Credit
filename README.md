@@ -74,14 +74,43 @@ To save these objects, I use pickle.dump() to write them to a binary file on dis
 Flask is a micro web framework written in Python that allows you to easily create web applications and RESTful web services. It is lightweight and flexible, making it a popular choice for building small to medium-sized web applications.
 With Flask, I can define routes for different HTTP methods such as GET, POST, PUT, and DELETE. I can define templates for rendering HTML pages, handle form submissions, and interact with databases.
 To get started with Flask, I install it using pip, the Python package manager. Once installed, I create a new Flask application by defining a Python script with the necessary routes and functions.
+```python
+from flask import Flask
+from flask import request
+from flask import jsonify
 
+
+app = Flask('analysis') 
+
+@app.route('/predict', methods =['POST'])
+def predict():
+    test = request.get_json()
+    # prediction = predict_single_test(test)
+    test_encoded = encoded.transform(test)
+    result = test_encoded
+    test_scaler = scaler.transform(test_encoded)
+    y_pred = model.predict_proba(test_scaler)[0,1]
+    risk = y_pred >= 0.3
+
+    result = {'risk_proba' : y_pred,
+        'risk' :  bool(risk)}
+    return jsonify(result)
+
+if __name__ == "__main__":
+    app.run(debug = True, host = '0.0.0.0', port  = 9696)
+```
 
 This code creates a Flask web service that responds to requests on the '/predict URL path with the results of our model. When run directly, the application runs in debug mode on port 9696 of the local machine, and is accessible to other devices on the network via the IP address '0.0.0.0'.
 
 
 
+
+
 # How to run web server
 # Local
+pipenv shell
+uvicorn enpoint-fast:app --host 0.0.0.0 --port 9696 --reload
+
 ```bash
 docker build -t predict_fast .
 ```
@@ -90,6 +119,11 @@ docker build -t predict_fast .
 docker run -it -p 9696:9696 --rm predict_fast
 ```
 
+docker run -it -p 9696:9696 --rm predict_fast 
+
+
+
+conda deactivate, conda activate
 # cloud
 
 

@@ -11,7 +11,8 @@ pandas = "*"
 gunicorn = "*"
 matplotlib = "*"
 lightgbm = "*"
-
+uvicorn = "*"
+fastapi = "*"
 
 [dev-packages]
 ipykernel = "*"

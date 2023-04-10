@@ -6,6 +6,8 @@ with open("Model_C=1.0.bin", 'rb') as file_in:
     encoded,scaler,model = pickle.load(file_in)
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from typing import Optional
 
 from pydantic import BaseModel
@@ -38,25 +40,20 @@ class Customer(BaseModel):
     Experience: Optional[float]
     Total_income_lifetime_employed: Optional[float]
     Working_year_proportion: Optional[float]
-    Rand: int
 
 @app.post("/predict")
 async def predict(request : Customer):
     test = request.dict()
     # prediction = predict_single_test(test)
     test_encoded = encoded.transform(test)
-    result = test_encoded
     test_scaler = scaler.transform(test_encoded)
     y_pred = model.predict_proba(test_scaler)[0,1]
 
-    result = {'risk_proba' : y_pred,
-        'risk' :  bool(y_pred)}
-    return result
+    result = {'risk_proba' : float(y_pred),
+        'risk_raito_30' : bool(y_pred >= 0.3)}
+    json_compatible_data = jsonable_encoder(result)
+    return JSONResponse(json_compatible_data)
 
-
-@app.get("/benz")
-async def benz():
-    return {"name":"benz"}
 
 
 # @app.route('/predict', methods =['POST'])
